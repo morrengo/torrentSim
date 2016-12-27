@@ -1,6 +1,7 @@
 -module(torrentCom).
-%-export([main/0]).
 -compile(export_all).
+
+-record(client, {pid,has,wants}).
 
 requestAll([]) -> 0;
 requestAll([Dest|Rest]) ->

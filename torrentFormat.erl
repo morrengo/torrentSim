@@ -1,13 +1,22 @@
 -module(torrentFormat).
--export([formatFile/3]).
+-export([formatFile/3,fileToHas/1]).
 
--record(file, {file_name, file_hash, chunks}).
+-record(file, {file_name, file_hash, chunks, length}).
 -record(chunk, {chunk_number, data}).
+-record(wishList, {file_name, chunks_numbers}).
+
+fileToHas(File) ->
+	#wishList{	file_name = File#file.file_name,
+				chunks_numbers = lists:map(fun(Chunk) 
+					-> Chunk#chunk.chunk_number end, File#file.chunks)}.
+
+
 
 formatFile(Name,FileData,ChunkSize) ->
-	#file{	file_name = Name,
+	#file{ 	file_name = Name,
 			file_hash = 0,
-			chunks = chunkify(FileData,ChunkSize)}.
+			chunks = chunkify(FileData,ChunkSize),
+			length = length(FileData) div ChunkSize + 1}.
 
 chunkify(Data,ChunkSize) -> lists:reverse(chunkifyImp(Data,[],0,ChunkSize)).
 
