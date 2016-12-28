@@ -2,35 +2,36 @@
 -compile(export_all).
 
 -record(client, {pid,has,wants}).
+-record(wishes, {has,wants}).
 
-requestAll([]) -> 0;
-requestAll([Dest|Rest]) ->
-	Dest!{self(),send_me_data},
-	requestAll(Rest).
+requestAll([],_) -> 0;
+requestAll([MyClient|Rest],MyWishes) ->
+	MyClient!{self(),MyWishes,send_me_data},
+	requestAll(Rest,MyWishes).
 
-receiveGift(Data,Gift) ->
-	case lists:member(Gift,Data) of
-    	true -> Data;
-        false -> [Gift|Data]
+receiveGift(Data, File_name, Chunk) ->
+	case fileFormat:findFile(Data, File_name) of
+    	[] -> Data;
+        _Else -> fileFormat:addChunk(Data, File_name, Chunk)
     end.
 
-sendData(To,Data) ->
+sendData(To, HisWishes, Data) ->
 	lists:foreach(fun(X) -> To!{X,gift} end,Data).
 
 addClients(NewClients,MyClients) ->
 	MyClients ++ (NewClients -- MyClients).
 
 client(MyClients,Data) ->
-	requestAll(MyClients),
+	requestAll(MyClients, fileFormat:filesToWants(Data)),
 	timer:sleep(500),
 	io:format(": ~p ~n",[Data]),
 	receive
-		{NewClients,new_clients} ->
+		{NewClients, new_clients} ->
 			client(addClients(NewClients,MyClients),Data);
-		{Gift,gift} ->
-			client(MyClients,receiveGift(Data,Gift));
-		{From,send_me_data} ->
-			sendData(From,Data),
+		{File_name, Chunk, gift} ->
+			client(MyClients,receiveGift(Data, File_name, Chunk));
+		{From, HisWishes, send_me_data} ->
+			sendData(From, HisWishes, Data),
 			client(MyClients,Data)
 	end.
 
