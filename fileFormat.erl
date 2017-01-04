@@ -1,23 +1,23 @@
 -module(fileFormat).
--export([formatFile/3,filesToHas/1,filesToWants/1,addChunk/3,findFile/2]).
-
+%-export([formatFile/3,filesToHas/1,filesToWants/1,addChunk/3,findFile/2]).
+-compile(export_all).
 -record(file, {file_name, file_hash, chunks, length}).
 -record(chunk, {chunk_number, data}).
 -record(wishList, {file_name, chunks_numbers}).
 
 %extracting "wants" and "has" from files
 
-filesToHas(Files) -> filesToHasImp(Files,[]).
+filesToHas(Files) -> filesToHas(Files,[]).
 
-filesToHasImp([File|Rest], Result) ->
-	filesToHasImp(Rest, Result ++ [fileToHas(File)]);
-filesToHasImp([], Result) -> Result.
+filesToHas([File|Rest], Result) ->
+	filesToHas(Rest, Result ++ [fileToHas(File)]);
+filesToHas([], Result) -> Result.
 
-filesToWants(Files) -> filesToWantsImp(Files,[]).
+filesToWants(Files) -> filesToWants(Files,[]).
 
-filesToWantsImp([File|Rest], Result) ->
-	filesToWantsImp(Rest, Result ++ [fileToWants(File)]);
-filesToWantsImp([], Result) -> Result.
+filesToWants([File|Rest], Result) ->
+	filesToWants(Rest, Result ++ [fileToWants(File)]);
+filesToWants([], Result) -> Result.
 
 fileToHas(File) ->
 	#wishList{	file_name = File#file.file_name,
@@ -26,7 +26,7 @@ fileToHas(File) ->
 
 fileToWants(File) ->
 	#wishList{	file_name = File#file.file_name,
-				chunks_numbers = lists:seq(0, File#file.length) 
+				chunks_numbers = lists:seq(0, File#file.length-1) 
 				-- lists:map(fun(Chunk) 
 					-> Chunk#chunk.chunk_number end, File#file.chunks)}.
 
@@ -82,36 +82,23 @@ addChunk([File|Rest], File_name, Chunk, Result) ->
 				length = File#file.length }
 			]);
 	true ->
-		addChunk(Rest, File_name, Chunk, Result ++ File)
+		addChunk(Rest, File_name, Chunk, Result ++ [File])
 	end.
 
 
 insertChunk(Chunks, ChunkIn) -> insertChunk(Chunks, ChunkIn, []).
-insertChunk([Chunk1|Rest], ChunkIn, []) ->
-	Num = ChunkIn#chunk.chunk_number,
-	if (Num < Chunk1#chunk.chunk_number) ->
-		insertChunk(Rest, [], [ChunkIn,Chunk1]);
+
+insertChunk([Chunk|Rest], ChunkIn, Result) ->
+	if(Chunk#chunk.chunk_number == ChunkIn#chunk.chunk_number) ->
+		Result ++ [Chunk] ++ Rest;
+	(Chunk#chunk.chunk_number > ChunkIn#chunk.chunk_number) ->
+		Result ++ [ChunkIn,Chunk] ++ Rest;
 	true ->
-		insertChunk(Rest, ChunkIn, [Chunk1])
+		insertChunk(Rest, ChunkIn, Result ++ [Chunk])
 	end;
-insertChunk([], _, Result) -> Result;
-insertChunk([Chunk1|Rest], [], Result) ->
-	insertChunk(Rest, [], Result ++ [Chunk1]);
-insertChunk([Chunk1], ChunkIn, Result) ->
-	Num = ChunkIn#chunk.chunk_number,
-	if (Num > Chunk1#chunk.chunk_number) ->
-		insertChunk([], [], Result ++ [Chunk1,ChunkIn]);
-	true ->
-		insertChunk([], [], Result ++ [ChunkIn,Chunk1])
-	end;
-insertChunk([Chunk1, Chunk2|Rest], ChunkIn, Result) ->
-	Num = ChunkIn#chunk.chunk_number,
-	if (Num > Chunk1#chunk.chunk_number) and
-	   (Num < Chunk2#chunk.chunk_number) ->
-		insertChunk(Rest, [], Result ++ [Chunk1,ChunkIn,Chunk2]);
-	true ->
-		insertChunk([Chunk2|Rest], ChunkIn, Result ++ [Chunk1])
-	end.
+insertChunk([],ChunkIn,Result) -> 
+	Result ++ [ChunkIn].
+
 
 findFile([File|Rest], File_name) ->
 	if (File#file.file_name == File_name) ->
@@ -121,3 +108,28 @@ findFile([File|Rest], File_name) ->
 	end;
 findFile([], _) -> [].
 
+chunkIntersection(Files, Wishes) -> chunkIntersection(Files, Wishes, []).
+chunkIntersection([File|Rest], Wishes, Result) -> 
+	chunkIntersection(Rest, Wishes, findChunks(File,Wishes) ++ Result);
+chunkIntersection([],_,Result) -> Result.
+
+findChunks(File, Wishes) -> findChunks(File, Wishes,[]).
+findChunks(File, [Wish|Rest], Result) ->
+	if(Wish#wishList.file_name == File#file.file_name) ->
+		findChunks(File, Rest,
+		Result ++ [#file{file_name = File#file.file_name,
+			  file_hash = File#file.file_hash,
+			  chunks = intersect(File#file.chunks,Wish#wishList.chunks_numbers),
+			  length = File#file.length}]);
+	true ->
+		findChunks(File,Rest, Result)
+	end;
+findChunks(_,[],Result) -> Result.
+
+intersect(MyChunks, WantedChunks) -> intersect(MyChunks, WantedChunks, []).
+intersect([MyChunk|Rest], WantedChunks, Result) ->
+	case lists:member(MyChunk#chunk.chunk_number,WantedChunks) of
+		true -> intersect(Rest, WantedChunks, Result ++ [MyChunk]);
+		false -> intersect(Rest, WantedChunks, Result)
+	end;
+intersect([],_,Result) -> Result.
